@@ -26,18 +26,22 @@ options(repos = r)
 This week we are going to use a variety of packages including:
 `packages <- c("ggplot2", "sandwich", "lme4", "lmtest", "merTools", "ResourceSelection", "GGally", "Hmisc", "plotrix", "pander", "lattice", "jstats", "sjstats", "jtools")`
 ```{r load packages, include=FALSE}
-#function to install and load required packages
-ipak <- function(pkg){
-  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
-  if (length(new.pkg)) 
-    install.packages(new.pkg, dependencies = TRUE)
-  sapply(pkg, require, character.only = TRUE)
-}
-
 #load or install these packages:
 packages <- c("ggplot2", "sandwich", "lme4", "lmtest", "merTools", "ResourceSelection", "GGally", "Hmisc", "plotrix", "pander", "lattice", "jstats", "sjstats", "jtools")
 #run function to install packages
-ipak(packages)
+
+
+#function to install and load required packages
+## Now check each packages, if it needs to be installed, install it, then load it
+package.check <- lapply(
+  packages,
+  FUN = function(x) {
+    if (!require(x, character.only = TRUE)) {
+      install.packages(x, dependencies = TRUE)
+      library(x, character.only = TRUE)
+    }
+  }
+)
 ```
 Note lme4 is the workhorse of fitting generalized linear mixed effects models, but also see the following packages
 +glmm
@@ -51,6 +55,7 @@ Also note that merTools are a set of post-estimation commands written to interfa
 wolfkde2 <- read.csv("Data/wolfkde.csv", header=TRUE, sep = ",", na.strings="NA", dec=".")
 wolfkde3 <-na.omit(wolfkde2)
 wolfkde3$usedFactor <-as.factor(wolfkde3$usedFactor)
+wolfdke
 
 head(wolfkde3)
 table(wolfkde2$pack, wolfkde2$used)
@@ -67,12 +72,15 @@ ggcoef(top.env, exclude_intercept = TRUE)
 Next, we will subset by packs
 
 ```{r message=FALSE}
-top.env.bv <- glm(used ~ Elevation2 + DistFromHighHumanAccess2 + openConif+modConif+closedConif+mixed+herb+shrub+water+burn, family=binomial(logit), data=wolfkde3, subset=pack== "Bow Valley")
+# fit the top model to both wolf packs
+top.env.bv <- glm(used ~ Elevation2 + DistFromHighHumanAccess2 + openConif+modConif+closedConif+mixed+herb+shrub+burn, family=binomial(logit), data=wolfkde3, subset=pack== "Bow Valley")
 pander(summary(top.env.bv))
+ggcoef(top.env.bv, exclude_intercept = TRUE)
 
 ## but subset by packs
-top.env.rd <- glm(used ~ Elevation2 + DistFromHighHumanAccess2 + openConif+modConif+closedConif+mixed+herb+shrub+water+burn, family=binomial(logit), data=wolfkde3, subset=pack== "Red Deer")
+top.env.rd <- glm(used ~ Elevation2 + DistFromHighHumanAccess2 + openConif+modConif+closedConif+mixed+herb+shrub+burn, family=binomial(logit), data=wolfkde3, subset=pack== "Red Deer")
 pander(summary(top.env.rd))
+ggcoef(top.env.rd, exclude_intercept = TRUE)
 ```
 
 
@@ -121,8 +129,11 @@ In lm(), glm(), lmer() code, the intercept is often implied and we don't have to
   * lmer(y ~ x + (x|Individ), data = mydata)
 * Remember x is the regression coefficient (direcion and magnitude, aka slope)
 * lmer(height ~ mass + (mass|Individ), data = myData)
-  - The effect of mass can vary per individual
-  - The intercept can vary per individual	
+  - This means:
+  - 1. The effect of mass can vary per individual
+  - 1. The intercept can vary per individual	
+  
+These are ways to write hot fit different ones 
 
 *Random slope only:The coefficient can vary per Individ*
   
@@ -132,10 +143,19 @@ In lm(), glm(), lmer() code, the intercept is often implied and we don't have to
   
 
 ```{r}
+# note below that +(1|pack) is the only thing that differs
+## this means a random intercept of one conditioned on (|) pack
+## What it is conditioned on has to be a categorical variable
 top.env.mixed <- glmer(used~Elevation2 + DistFromHighHumanAccess2 + openConif+modConif+closedConif+mixed+herb+shrub+water+burn+(1|pack), data=wolfkde3,family=binomial(link="logit"))
 summary(top.env.mixed)
 ```
 Note we got a lot of error messages here including:
+
+df.resid - degrees of freedom of the residuals is informative 
+
+"random effects"
+
+ - coefficients have all changed as well as standard errors 
 
 
 ```
@@ -149,6 +169,8 @@ Note we got a lot of error messages here including:
 #- Rescale variables?
 ```
 
+We have to center and scale our variables so they're all on the same axes
+
 ## 1.1 Rescaling variables
 The error messages from the fit of the wolf data with a random effect for pack tells us that we need to rescale our variables.  What is rescaling? In R, the command 
 ```
@@ -157,14 +179,20 @@ scale(x)
 standardizes the data with respect to the mean and standard deviation of x. Note the defaults are to center to 0 and scale by dividing the centered x values by their standard deviation. The new variable has a mean = 0 and are now expressed in units +/- of standard deviations. This is a very common/important step in the fitting of GLMM's. This also has the direct advantage of being able to now directly compare the coefficients of continuous covariates in terms of SDs. Finally, not we do not really ever scale categorical variables.  These coefficients are already expressed in a way that can be compared to each other. 
 
 ```{r}
+# only need to rescale and standardize continuous variables
+#look at dataset
 head(wolfkde3)
+# scale elevation
 wolfkde3$Elevation2_sc <-scale(wolfkde3$Elevation2)
+# look at the original vs the scaled
 hist(wolfkde3$Elevation2)
 hist(wolfkde3$Elevation2_sc)
+# test to see if they're the same 
 plot(wolfkde3$Elevation2, wolfkde3$Elevation2_sc)
 summary(wolfkde3$Elevation2)
 summary(wolfkde3$Elevation2_sc)
 
+# Do the same thing for distance to high human access
 wolfkde3$DistFromHighHumanAccess2_sc <- scale(wolfkde3$DistFromHighHumanAccess2)
 plot(wolfkde3$DistFromHighHumanAccess2, wolfkde3$DistFromHighHumanAccess2_sc, )
 ```
@@ -187,7 +215,8 @@ So for every 410 m increase in elevation, the odds of wolf use change by
 ```{r}
 exp(top.env2$coefficients[2])
 ```
-So, the odds decrease by a lot, 94%, when you increase by 410 m. EXCERCISE: Go back and calcualte this manually for 400m to check if this makes sense. 
+So, the odds decrease by a lot, 94%, when you increase by 410 m. EXCERCISE: Go back and calculate this manually for 400m to check if this makes sense. 
+ - sub into unstandardized coefficients and see what the difference is (0:16:20)
 
 One major advantage of standardized covariates, and coefficients, is that now you can directly compare the coefficients of Elevation and Distance from high human access? Which one has a 'stronger' effect? Elevation. Comparing the categorical landcover coefficients, which one is the strongest ? (burn) 
 
@@ -219,6 +248,8 @@ Note that we get this error message because top.env.rd and top.env.bv are fit wi
 
 Either way, comparing the fixed-effect versus the mixed-effect model, we can see that the glmm is far better. However, a simpler model with two separate models, one for each wolf pack, explained the dataset better. But in practice, we would almost never fit a model with just 2 levels of a random effect, so now we will go to a more 'sensible' dataset. 
 
+If you fit a mixed effect model and the variance and standard deviation are zero and there's no difference in AIC, we don't need mixed effects. 
+
 
 # Mixed-effects Models with Migrant Elk
 
@@ -243,6 +274,8 @@ elk <- read.table("Data/lab7_elk_migrant.csv", header=TRUE, sep=",", na.strings=
 head(elk)
 elk$elkuidF <- as.factor(elk$elkuid)
 
+# we're going to focus on herbaceous biomass, predation risk by wolves 
+
 # get to know our data
 table(elk$elkuid, elk$year)
 table(elk$elkuid, elk$used)
@@ -251,6 +284,7 @@ table(elk$elkuid, elk$used)
 Get to know our data graphically
 ```{r}
 ggplot(elk, aes(x=utmx, y = utmy, color = elkuidF)) + geom_point()
+# this shows MCP of elk using use and available data
 ```
 Next, how about 'just' the telemetry locations?
 ```{r}
@@ -265,7 +299,9 @@ So there are some data from 2003, most from 2004, 1 elk from 2002.  And there is
 Today, we are going to be conducting an RSF as a function of Forage Biomass (totalherb) and wolf predation risk (ctotrisk).  Lets look at these two variables and get to know them. 
 ```{r}
 hist(elk$ctotrisk)
+# lots of zeros in here
 hist(log(elk$ctotrisk))
+# if we log transform, it's much more normally distributed - think about using log predation risk 
 
 summary(elk[,30:31]) ## So 1579 NA's predation risk values, and 11 NA's for total herbaceous vegetation
 length(elk$ctotrisk)
@@ -273,6 +309,7 @@ length(elk$ctotrisk)
 
 So we need to subset dataset for complete.cases where there are no NA data - why is this important?  How can we compare models using AIC with different number of rows?
 ```{r}
+# similar functionality to na.rm()
 elk2 <- elk[complete.cases(elk[30:31]), ]
 summary(elk2)
 length(elk2$ctotrisk)
@@ -280,6 +317,7 @@ length(elk2$ctotrisk)
 
 Next, we still need to clean up predation risk data being predicted > 1
 ```{r}
+# move everything that's larger
 elk2$ctotrisk[elk2$ctotrisk>1]=1
 table(elk2$elkuid, elk2$year)
 table(elk2$elkuid, elk2$used)
@@ -294,6 +332,7 @@ Next, lets calculate mean wolf predation risk
 wolf = tapply(na.omit(elk2$ctotrisk), elk2$elkuid[which((elk2$ctotrisk!="NA")==TRUE)],mean)
 wolf
 hist(wolf)
+# this is an average of predation risk across each individual elk
 ```
 This shows a wide variation in the exposure of elk to wolf predation risk. 
 
@@ -316,6 +355,7 @@ elk2$risk2_sc <- scale(elk2$risk2)
 
 ##### AGain, just to double check what scale is doing
 plot(elk2$ctotrisk_sc, elk2$ctotrisk)
+# once again, centering and scaling doesn't affect the data other than changing the values
 ```
 
 ## Fitting Standard Fixed-Effects Model and Understanding Ecology
@@ -330,12 +370,14 @@ forANDrisk = glm(used~totalherb+ctotrisk, data=elk2,family=binomial(link="logit"
 forrisk = glm(used~totalherb+ctotrisk+ctotrisk*totalherb, data=elk2,family=binomial(link="logit"))
 
 AIC(forage, risk, forANDrisk, forrisk)
+# absolute size of AIC doesn't matte
 ```
 
 So, the best model from AIC perspective is forrisk
 ```{r}
 summary(forrisk)
 ggcoef(forrisk, exclude_intercept = TRUE)
+# note that these are in different units and not standardized, so you can't directly compare them 
 ```
 
 Ecologically, what does this model say to us? There is some intercept, which we now now is fundamentally related to the sampling fraction of used : available locations, so we don't pay it much attention.  We see that the probability of elk use increases with increasing forage biomass (B-totalherb = 0.045), increases with increasing predation risk (B-ctotrisk = 0.48) - which at first is a bit puzzling. Why would elk select areas of higher predation risk?  But then we note the very strong effect of the NEGATIVE interaction between total predation risk and herbaceous biomass (B-f*p = -0.059). A negative interaction is logically interpreted as reduced probabiltiy of elk use with increasing forage and/or predation.  But interpreting an interaction in a logistic regression model of any kind is complicated.  We will graph this later. 
@@ -373,6 +415,7 @@ hist(log(elk$totalherb))
 quantile(elk$totalherb,na.rm=TRUE)
 mean(elk$totalherb,na.rm=TRUE)
 
+# how to visualize the interaction in a two-dimensional space: visualze different quantiles into low, medium, and high 
 herb.lo = 5
 herb.med = 15
 herb.hi = 50
@@ -382,11 +425,12 @@ herb.hi = 50
 Now we will make predictions for the top model, forrisk, given these new data for the low, medium and high levels of forage, and the actual values of predation risk by wolves. 
 ```{r}
 predrisk = seq(0,1,0.01)
+# make first predictions low predation risk 
 pred.lo = predict(forrisk,type="response", newdata = data.frame(totalherb=herb.lo, ctotrisk=predrisk))
 pred.med = predict(forrisk,type="response", newdata = data.frame(totalherb=herb.med, ctotrisk=predrisk))
 pred.hi = predict(forrisk,type="response", newdata = data.frame(totalherb=herb.hi, ctotrisk=predrisk))
 
-# Make plot
+# Make plot - used in y, x axis is predation risk, add low medium and high
 plot(elk2$ctotrisk,elk2$used, xlab="Risk", ylab="Pr(Use)")
 lines(predrisk,pred.lo, lty=1)
 lines(predrisk,pred.med, lty=2)
@@ -403,7 +447,9 @@ I often use ggplot2 to help visual interactions in glm(er) type models.  I first
 elk2$usedF <- as.factor(elk2$used)
 ggplot(elk2, aes(x=ctotrisk, y = used)) + stat_smooth(method="glm", method.args = list(family="binomial"))
 ggplot(elk2, aes(x=totalherb, y = used)) + stat_smooth(method="glm", method.args = list(family="binomial"))
+# very strong logistic response
 ggplot(elk2, aes(x=riskforage, y = used)) + geom_rug() + stat_smooth(method="glm", method.args = list(family="binomial"))
+# facet and fill by forage class
 ```
 But what does this last plot mean? Need to make a categorical variable at 3 different levels of forage, and then facet or fill by this new variable, herbaceous forage class. 
 
@@ -412,6 +458,7 @@ Note I use the Hmisc package here to split into categories
 elk2$forage.cat  <- as.factor(as.numeric(cut2(elk2$totalherb, g=3)))
 elk2$forage.cat  <- cut2(elk2$totalherb, g=3)
 ggplot(elk2, aes(x=ctotrisk, y = used, fill = forage.cat)) + stat_smooth(method="glm", method.args = list(family="binomial"))
+# shows a negative interaction
 ```
 note this plot looks different than the interaction I made above, with mean levels of 5, 15, and 50. But this is for different classes, and, not just a fixed level, but the mean value in that category. But it shows the same trend, that there is a flip in how elk respond to wolf predation risk at low and moderate to high forage values. 
 
@@ -421,6 +468,17 @@ elk2$risk.cat  <- cut2(elk2$ctotrisk, g=3)
 ggplot(elk2, aes(x=totalherb, y = used, fill = risk.cat)) + stat_smooth(method="glm", method.args = list(family="binomial"))
 ```
 Both graphs show that the effect of the interaction is only really present at low forage levels when elk select for high predation risk, but otherwise they select high forage biomass at all times, just less when under high predation risk.   But a key take home point here is to ALWAYS explore 2-way interactions BOTH ways, wihch each variable on the X-axis. 
+
+
+```{r Screen for Colinearity}
+plot(elk2$ctotrisk, elk2$totalherb)
+# look at the correlation
+cor(elk2$ctotrisk2, elk2$totalherb)
+cor(log(elk2$ctotrisk2), elk2$totalherb)
+
+# now look for the coefficients to flip
+
+```
 
 
 ## Visualizing the Marginal Effects with Resource Selection Marginal Effects 'mep'
@@ -452,6 +510,10 @@ forrisk2 <-vcovHC(forrisk, elk$elkuid, type = "const", sandwhich = TRUE)
 forrisk2
 
 coeftest(forrisk, forrisk2)
+# handy to test for the differences in coefficients in any model 
+
+# this shows that the assumption of independence with total herbaceous isn't met
+
 ```
 Compare the SE's that are robust and not robust for comparison but without a cluster variable.  This reports a z-test statistic and associated P-value for whether there is a difference in the estimate of the two coefficients from the two models. This is a handy function in general to test the coefficients from 2 models of any type with the same structure. Here it tells us that there is a difference in the intercept (not really that ecologically interesting) and a difference in forage between the two models.  Because the Z-statistic is positive, 0.04 for totalherb, that tells us that failing to take into account the 'clustering' within individuals leads us to overestimate the effect of forage. 
 
@@ -465,13 +527,15 @@ Now we will fit a fixed-effects model with a fixed effect intercept for each ind
 forriskFI = glm(used~totalherb+ctotrisk+ctotrisk*totalherb+elkuidF, data=elk,family=binomial(link="logit"))
 summary(forriskFI)
 ggcoef(forriskFI, exclude_intercept = TRUE)
+# now each individual elk has an offset/intercept that are reflective of its sampling fraction
 ```
 
 Discussion - what does each coefficient mean in a used-available design? What is the correspondance between the sampling ratio of used to available locations and the coefficient?
 ```{r}
 table(elk2$elkuid, elk2$used)
 ```
-Check for elk 196, 141/(141+1120) = 0.557; B is 0.502 - close enough in multiple logit model with continuous covariates. 
+ Where the sampling fraction is coming from 
+Check for elk 196, 141/(141+112) = 0.557; B is 0.502 - close enough in multiple logit model with continuous covariates. 
 
 There is absolutely nothing wrong with using a fixed factor for individual or groups instead of random effects. Manly chapter 5 covers this.  However, why would we not just want to use this fixed effect? There are 2 reasons. First, philosophical - having to do with wanting to make inferences beyond just our radiocollared sample. And second, the penalty of estimating all these additional coefficients for each individual elk. See here: 
 
@@ -479,6 +543,8 @@ There is absolutely nothing wrong with using a fixed factor for individual or gr
 AIC(forriskFI, forage, risk, forANDrisk, forrisk)
 ```
  The main issue is the greater number of parameters, here, 1 for each individual elk. But, from an AIC perspective, the fixed-effects of each individual elk provide a better 'fit'. But again, remember what the intercept means in a used-available design.
+ 
+ 
 
 # Two-Stage Modeling
 
@@ -514,15 +580,19 @@ coefs = as.data.frame(lapply(models, coef))
 coefs
 
 #Calculate means for each of the coefficients
+# herbaceous or intercept?
 mean(as.numeric(coefs[1,]))
+# forage 
 mean(as.numeric(coefs[2,]))
+# predation
 mean(as.numeric(coefs[3,]))
+# interaction
 mean(as.numeric(coefs[4,]))
 ```
 
 Therefore, the linear part of the two-staged model would be:
 ```
-Y =  -2.15 - 1.417xtotalherb_sc -6.006xctotrisk_sc + 6.657*totalherb_sc:ctotrisk_sc
+Y =  -2.15 - 1.417xtotalherb_sc -6.006xctotrisk_sc - 6.657*totalherb_sc:ctotrisk_sc
 ```
 Next, let us make some graphical displays of the Beta coefficients across individuals
 
@@ -532,8 +602,20 @@ hist(as.numeric(coefs[1,]), main="intercept",breaks=10)
 hist(as.numeric(coefs[2,]), main="Forage",breaks=10)
 hist(as.numeric(coefs[3,]), main ="Risk",breaks=10)
 hist(as.numeric(coefs[4,]), main="Forage*Risk",breaks=10)
+#histogram of the beta coefficients for each elk
+# note that neither are a normal distribution# two stage model treats each one equually 
+# if we treat it as normal even though its not, it'll 
+#Looking at distribution of coef and amount of variation in your coef is important to understand what's going on with a mixed effects model 
 ```
 So a biological conclusions is that there is substantial variation between individuals in their coefficients for forage, wolf predation risk and the interaction. 
+
+
+
+
+
+
+
+
 
 # Mixed-Effects Models!
 
@@ -546,6 +628,7 @@ Gillies, C., M. Hebblewhite, S. E. Nielsen, M. Krawchuk, C. Aldridge, J. Frair, 
 
 ```{r}
 fr.ri = glmer(used~totalherb_sc+ctotrisk_sc+ctotrisk_sc*totalherb_sc+(1|elkuid), data=elk2,family=binomial(link="logit"), verbose=FALSE)
+# verbose = TRUE shows you every iteration
 summary(fr.ri)
 ```
 Lets review how to interpret the Random Effects. Here, they are saying we have 17 elk with 34,390 rows of data, and the Std. Dev = 0.7899, which, compared to our standardized coefficient estimates for total herb and wolf risk are relatively huge. That is, another way of saying there is substantial individual-level variation in resource selection between individuals, equal to or greater than the variation in the actual strength of selection.  This is an important insight, confirming what we already learned from our Two-stage modeling above. 
@@ -557,6 +640,8 @@ confint(fr.ri, method = "Wald")
 ```
 `confint(fr.ri, method = "boot")`
 `confint(fr.ri, method = "profile")`
+
+Standard errors in a linear regression model don't translate to a confidece interval
 
 
 Lets remind ourselves of the model structure and 'new' parameters being estimated with the 95% confidence intervals graphically. 
@@ -586,8 +671,11 @@ It is often useful to compare the beta coefficients from 'manual' two-stage mode
 `ranef()` which extracts the random effects, which in this model is just (1|elkuid), so, one coefficient for each individual elk
 ```{r}
 # Useful functions
+# fixedef() - extracts fixed effects estimates
 fixef(fr.ri) 
+# ranef() - extracts random effects
 ranef(fr.ri)
+# that's how much more or less than the expected probability each individual is 
 ```
 Compare these to the fixed effect coefficients estimated with an intercept for each individual elk? How do they compare?
 
@@ -599,16 +687,18 @@ Note this shows you the entire coefficient matrix for all individual elk - note 
 
 Next we will compare the intercepts from two step and mixed-effects model.  This forces us to think about what the interpretation of a random intercept is in a used-available design.  First, I out everything in one place; I add the fixed intercept to the random effects here.Note you could also get this from coef(fr.ri) as we just did. 
 ```{r}
+# column bind the betas from the coefficients (randomand fixed effects)
 B0 <- cbind(as.numeric(coefs[1,]),ranef(fr.ri)$elkuid[,1]+fixef(fr.ri)[1])
 rownames(B0)=rownames(ranef(fr.ri)$elkuid)
 colnames(B0) = c("Two-Step","Random Effects")
 str(B0)
 B0
 par(mfrow=c(1,1))
+# x axis Bo from two stage model # y axis is the random intercept with mean = 0 and an assumed random distribution
 plot(B0[,1], B0[, 2])
 abline(lm(B0[,1] ~ B0[, 2]))
 ```
-This plot shows the Two-step coefficients for each individual elk on the X axix, and the random coefficient for each individual elk from the GLMM on the Y-axis. What do you notice? What are the axes of Y and X here?  Should there be a relationship between these two?
+This plot shows the Two-step coefficients for each individual elk on the X axis, and the random coefficient for each individual elk from the GLMM on the Y-axis. What do you notice? What are the axes of Y and X here?  Should there be a relationship between these two?
 
 Suprisingly, there is no real relationship between the fixed-effects estimates from the two-stage models for the intercept. Why is this? Lets take a look at the histogram of both:
 ```{r}
@@ -644,8 +734,13 @@ ranef(fr.rc) # These are the random effects, which in this model is just (1|elku
 First, note that fitting random coefficients took a long time with EVEN this modest dataset. Compare these to the fixed effect coefficients estimated with an intercept for each individual elk? How do they compare?
 ```{r}
 coef(fr.rc)
+# these are equaled by the fixed effects + the random effects (they come together to form the coefficients)
 ##### Note here that the coefficient for predation risk is allowed to vary
 summary(fr.rc)
+# this tells you that there's a huge amount of variation in individual response to predation risk
+# pop response is 0.99 to foraging 
+# correlation of fixed effects tells you how correllated the Bo coefficient is between groups
+# 
 ```
 
 Again, look at the Std.Dev of the random effects for elkuid (intercept) and wolfpredation risk, 8.533. That is DOUBLE the strength of the coefficient for wolf predation risk in the model. Also note that the coefficient for wolf predation risk has dramatically changed, becoming much stronger now. 
@@ -659,6 +754,8 @@ We use the lattice package.
 ```{r}
 lattice::dotplot(ranef(fr.rc, condVar = TRUE))
 ```
+
+The difference is that here we are looking for a distribution of random effects, which is unlike the previous plots we've looked at
 
 ## Compare Parameters between Two-stage and Mixed-Models
 Note that I use the coef function here
@@ -682,6 +779,8 @@ So, quite correlated from the 2 different models
 ```{r}
 plot(B.risk[,1], B.risk[,2])
 abline(lm(B.risk[,1] ~ B.risk[, 2]))
+# y axis random coefficient model
+# x axis - raw data?
 ```
 So here there is some correlation between the coefficients for predation risk from the Two-stage models (X-axis) and the glmm (Y axis). Now we are getting somewhere and this is starting to make more sense. Remember the intercepts are not really that meaningful in these Used-available rSF models, but here we see correlation in the coefficients - what matters. 
 
@@ -895,7 +994,7 @@ This is a key take home message. NEVER ignore the random effects variation!!!
 
 # Lab 7 Excercises! 
 
-In a concise lab report answer the following questions in JUST a methods & results/discussion format, and include your tidied up R code as an appendix. You only need to report enough methods details specifically about the equations and different model structures you are fitting.  Due electronically March 8th. 
+In a concise lab report answer the following questions in JUST a methods & results/discussion format, and include your tidied up R code as an appendix. You only need to report enough methods details specifically about the equations and different model structures you are fitting.   
 
 1.	Compare the model structures, Beta’s and SE’s for the naïve fixed-effects, the two-stage and the mixed-effect model structures (i.e., random intercept and random coefficient) for migratory GPS collared elk used in this lab.
 
