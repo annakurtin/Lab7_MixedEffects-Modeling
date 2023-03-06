@@ -27,7 +27,7 @@ This week we are going to use a variety of packages including:
 `packages <- c("ggplot2", "sandwich", "lme4", "lmtest", "merTools", "ResourceSelection", "GGally", "Hmisc", "plotrix", "pander", "lattice", "jstats", "sjstats", "jtools")`
 ```{r load packages, include=FALSE}
 #load or install these packages:
-packages <- c("ggplot2", "sandwich", "lme4", "lmtest", "merTools", "ResourceSelection", "GGally", "Hmisc", "plotrix", "pander", "lattice", "jstats", "sjstats", "jtools")
+packages <- c("ggplot2", "sandwich", "lme4", "lmtest", "merTools", "ResourceSelection", "GGally", "Hmisc", "plotrix", "pander", "lattice", "sjstats", "jtools")
 #run function to install packages
 
 
@@ -131,7 +131,7 @@ In lm(), glm(), lmer() code, the intercept is often implied and we don't have to
 * lmer(height ~ mass + (mass|Individ), data = myData)
   - This means:
   - 1. The effect of mass can vary per individual
-  - 1. The intercept can vary per individual	
+  - 1. The intercept can vary per individual 	
   
 These are ways to write hot fit different ones 
 
@@ -186,7 +186,11 @@ head(wolfkde3)
 wolfkde3$Elevation2_sc <-scale(wolfkde3$Elevation2)
 # look at the original vs the scaled
 hist(wolfkde3$Elevation2)
+# medianof 1918
 hist(wolfkde3$Elevation2_sc)
+# centered and scaled one has a median of zero
+# same relationship between x and y but now in terms of standard deviation
+
 # test to see if they're the same 
 plot(wolfkde3$Elevation2, wolfkde3$Elevation2_sc)
 summary(wolfkde3$Elevation2)
@@ -205,17 +209,21 @@ So we see that scaling a variable still keeps the exact same relationship betwee
 top.env2 <- glm(used ~ Elevation2_sc + DistFromHighHumanAccess2_sc + openConif+modConif+closedConif+mixed+herb+shrub+water+burn, family=binomial(logit), data=wolfkde3)
 pander(summary(top.env2))
 ```
-
+**Interpreting the output**
 Note that the beta coefficients are now being reported, for continuous covariates, in terms of standard deviation units.  So we would say that for every increase of 1 standard deviation of elevation, the logit beta coefficient changes by - -2.783. Note we have to remember what a standard deviation in elevation is:
 
 ```{r}
+# look at the summary stats
 sd(wolfkde3$Elevation2)
 ```
 So for every 410 m increase in elevation, the odds of wolf use change by
 ```{r}
 exp(top.env2$coefficients[2])
 ```
-So, the odds decrease by a lot, 94%, when you increase by 410 m. EXCERCISE: Go back and calculate this manually for 400m to check if this makes sense. 
+So, the odds decrease by a lot, 94%, when you increase by 410 m. 
+
+*EXCERCISE: Go back and calculate this manually for 400m to check if this makes sense.*
+
  - sub into unstandardized coefficients and see what the difference is (0:16:20)
 
 One major advantage of standardized covariates, and coefficients, is that now you can directly compare the coefficients of Elevation and Distance from high human access? Which one has a 'stronger' effect? Elevation. Comparing the categorical landcover coefficients, which one is the strongest ? (burn) 
@@ -231,7 +239,7 @@ See! - nasty error messages are gone.
 
 ## 1.2 Interpreting Random Effects
 
-Now we can also discuss how to interpret the random effects terms. We are now given a variance and standard deviation for the Random effect (here, pack). This is reported in units of standard deviations, which is another nice reason to standardize continuous (and categorical) covariates.  Here, we can interpre that there is a substantially STRONGER response by wolves to elevation than individual level variability. i.e., Beta-elevation = -3.152, and St.Dev wolf = 0.5472, or about 5.7 times stronger response to elevation than individual wolf pack variation. 
+Now we can also discuss how to interpret the random effects terms. We are now given a variance and standard deviation for the Random effect (here, pack). This is reported in units of standard deviations, which is another nice reason to standardize continuous (and categorical) covariates.  Here, we can interpret that there is a substantially STRONGER response by wolves to elevation than individual level variability. i.e., Beta-elevation = -3.152, and St.Dev wolf = 0.5472, or about 5.7 times stronger response to elevation than individual wolf pack variation. 
 
 Contrast that with the comparison of St.Dev (pack) to the coefficient for Distance from High Human Access = 0.4316.  This tells us that while most wolf packs avoided high human activity, there was more variation between packs in this response than the response. This tells us something about the variability in pack-level responses to human activity. 
 
@@ -272,6 +280,7 @@ Canada.
 # Bring in data
 elk <- read.table("Data/lab7_elk_migrant.csv", header=TRUE, sep=",", na.strings="NA", dec=".", strip.white=TRUE)
 head(elk)
+
 elk$elkuidF <- as.factor(elk$elkuid)
 
 # we're going to focus on herbaceous biomass, predation risk by wolves 
@@ -311,16 +320,16 @@ So we need to subset dataset for complete.cases where there are no NA data - why
 ```{r}
 # similar functionality to na.rm()
 elk2 <- elk[complete.cases(elk[30:31]), ]
-summary(elk2)
-length(elk2$ctotrisk)
+#summary(elk2)
+#length(elk2$ctotrisk)
 ```
 
 Next, we still need to clean up predation risk data being predicted > 1
 ```{r}
 # move everything that's larger
 elk2$ctotrisk[elk2$ctotrisk>1]=1
-table(elk2$elkuid, elk2$year)
-table(elk2$elkuid, elk2$used)
+#table(elk2$elkuid, elk2$year)
+#table(elk2$elkuid, elk2$used)
 
 # Compute sample size for each elk
 n = tapply(elk$idn, elk$elkuid,length)
@@ -330,7 +339,7 @@ n
 Next, lets calculate mean wolf predation risk
 ```{r}
 wolf = tapply(na.omit(elk2$ctotrisk), elk2$elkuid[which((elk2$ctotrisk!="NA")==TRUE)],mean)
-wolf
+#wolf
 hist(wolf)
 # this is an average of predation risk across each individual elk
 ```
@@ -338,7 +347,7 @@ This shows a wide variation in the exposure of elk to wolf predation risk.
 
 ```{r}
 forage = tapply(na.omit(elk2$totalherb), elk$elkuid[which((elk2$totalherb!="NA")==TRUE)],mean)
-forage
+#forage
 hist(forage)
 ```
 And quite a bit of variation, but not as much - absolutely - in the exposure to forage biomass (again, reported as g/m^2). 
@@ -353,11 +362,12 @@ elk2$riskforage_sc <- scale(elk2$riskforage)
 elk2$for2_sc <- scale(elk2$for2)
 elk2$risk2_sc <- scale(elk2$risk2)
 
-##### AGain, just to double check what scale is doing
+##### Again, just to double check what scale is doing
 plot(elk2$ctotrisk_sc, elk2$ctotrisk)
 # once again, centering and scaling doesn't affect the data other than changing the values
 ```
 
+###################left off 32:00 in lectre recording##############
 ## Fitting Standard Fixed-Effects Model and Understanding Ecology
 
 First, we are going to explore the straight forward RSF using the model from the Hebblewhite & Merrill (2009) paper discussed in class where migrant elk make trade-offs between risk and forage at the home range scale, as well as their interaction between risk and forage. We are not going to concern ourselves with model selection questions in this lab, but instead consider elk resource selection to be a function of wolf predation risk, total herbaceous forage biomass (g/m2) and their interaction.  
