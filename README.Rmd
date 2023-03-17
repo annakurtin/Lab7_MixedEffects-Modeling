@@ -380,14 +380,18 @@ forANDrisk = glm(used~totalherb+ctotrisk, data=elk2,family=binomial(link="logit"
 forrisk = glm(used~totalherb+ctotrisk+ctotrisk*totalherb, data=elk2,family=binomial(link="logit"))
 
 AIC(forage, risk, forANDrisk, forrisk)
-# absolute size of AIC doesn't matte
+# absolute size of AIC doesn't matter
 ```
+
+Takeaway: if you can create a priori models based on ecological knowledge or theory, it will make model selection much easier. 
 
 So, the best model from AIC perspective is forrisk
 ```{r}
 summary(forrisk)
 ggcoef(forrisk, exclude_intercept = TRUE)
 # note that these are in different units and not standardized, so you can't directly compare them 
+
+# tells us that areas with high herbaceous biomass and high predation risk are avoided by elk
 ```
 
 Ecologically, what does this model say to us? There is some intercept, which we now now is fundamentally related to the sampling fraction of used : available locations, so we don't pay it much attention.  We see that the probability of elk use increases with increasing forage biomass (B-totalherb = 0.045), increases with increasing predation risk (B-ctotrisk = 0.48) - which at first is a bit puzzling. Why would elk select areas of higher predation risk?  But then we note the very strong effect of the NEGATIVE interaction between total predation risk and herbaceous biomass (B-f*p = -0.059). A negative interaction is logically interpreted as reduced probabiltiy of elk use with increasing forage and/or predation.  But interpreting an interaction in a logistic regression model of any kind is complicated.  We will graph this later. 
@@ -401,6 +405,9 @@ summary(forrisk_sc)
 ggcoef(forrisk_sc, exclude_intercept = TRUE)
 ```
 This tells us the same, but oddly, note that the main effects for predation risk are now negative, not positive.  Question - WHY????
+
+If something isn't normally distributed, the mean will be pulled to negative when it is centered and scaled 
+When you see signs flipping as you center and scale them, its a sign that your distributions are probably not normally distributed.
 
 hint:
 
@@ -457,6 +464,7 @@ I often use ggplot2 to help visual interactions in glm(er) type models.  I first
 elk2$usedF <- as.factor(elk2$used)
 ggplot(elk2, aes(x=ctotrisk, y = used)) + stat_smooth(method="glm", method.args = list(family="binomial"))
 ggplot(elk2, aes(x=totalherb, y = used)) + stat_smooth(method="glm", method.args = list(family="binomial"))
+
 # very strong logistic response
 ggplot(elk2, aes(x=riskforage, y = used)) + geom_rug() + stat_smooth(method="glm", method.args = list(family="binomial"))
 # facet and fill by forage class
@@ -477,16 +485,20 @@ Note we can flip the interaction and view it from the wolf predation risk perspe
 elk2$risk.cat  <- cut2(elk2$ctotrisk, g=3)
 ggplot(elk2, aes(x=totalherb, y = used, fill = risk.cat)) + stat_smooth(method="glm", method.args = list(family="binomial"))
 ```
-Both graphs show that the effect of the interaction is only really present at low forage levels when elk select for high predation risk, but otherwise they select high forage biomass at all times, just less when under high predation risk.   But a key take home point here is to ALWAYS explore 2-way interactions BOTH ways, wihch each variable on the X-axis. 
+Both graphs show that the effect of the interaction is only really present at low forage levels when elk select for high predation risk, but otherwise they select high forage biomass at all times, just less when under high predation risk.   But a key take home point here is to ALWAYS explore 2-way interactions BOTH ways, which each variable on the X-axis. 
 
-
+So what if there's a correlation between forage and predation risk? What if the best foraging quality is in dense/covered areas that wolves favor. 
 ```{r Screen for Colinearity}
 plot(elk2$ctotrisk, elk2$totalherb)
 # look at the correlation
 cor(elk2$ctotrisk2, elk2$totalherb)
+# looks like they're not super correlated
 cor(log(elk2$ctotrisk2), elk2$totalherb)
 
+
 # now look for the coefficients to flip
+## herbaceous is a stable coefficient, predation is unstable
+## read the paragraph in this paper where Mark rationalizes out of this
 
 ```
 
@@ -521,8 +533,11 @@ forrisk2
 
 coeftest(forrisk, forrisk2)
 # handy to test for the differences in coefficients in any model 
+# use this to compare models that are created with the same data with the same coefficients 
 
 # this shows that the assumption of independence with total herbaceous isn't met
+
+# failing to account for clustering would overestimate the effect of the variable
 
 ```
 Compare the SE's that are robust and not robust for comparison but without a cluster variable.  This reports a z-test statistic and associated P-value for whether there is a difference in the estimate of the two coefficients from the two models. This is a handy function in general to test the coefficients from 2 models of any type with the same structure. Here it tells us that there is a difference in the intercept (not really that ecologically interesting) and a difference in forage between the two models.  Because the Z-statistic is positive, 0.04 for totalherb, that tells us that failing to take into account the 'clustering' within individuals leads us to overestimate the effect of forage. 
@@ -538,6 +553,8 @@ forriskFI = glm(used~totalherb+ctotrisk+ctotrisk*totalherb+elkuidF, data=elk,fam
 summary(forriskFI)
 ggcoef(forriskFI, exclude_intercept = TRUE)
 # now each individual elk has an offset/intercept that are reflective of its sampling fraction
+# F5 has less used than available points
+# F56 has more 
 ```
 
 Discussion - what does each coefficient mean in a used-available design? What is the correspondance between the sampling ratio of used to available locations and the coefficient?
@@ -558,7 +575,7 @@ AIC(forriskFI, forage, risk, forANDrisk, forrisk)
 
 # Two-Stage Modeling
 
-Next we will explore the 'poor-mans' version of mixed-effects models, somewhere between fitting a fixed-effect for each individual elk and a full mixed-effect model. While I call it a poor-mans version, it is honestly the first thing I do with any complex dataset to understand where the variation where the main sources of variation are coming from. 
+Next we will explore the 'poor man's' version of mixed-effects models, somewhere between fitting a fixed-effect for each individual elk and a full mixed-effect model. While I call it a poor-mans version, it is honestly the first thing I do with any complex dataset to understand where the variation where the main sources of variation are coming from. 
 
 The best papers to read here are: 
 
@@ -613,10 +630,13 @@ hist(as.numeric(coefs[2,]), main="Forage",breaks=10)
 hist(as.numeric(coefs[3,]), main ="Risk",breaks=10)
 hist(as.numeric(coefs[4,]), main="Forage*Risk",breaks=10)
 #histogram of the beta coefficients for each elk
-# note that neither are a normal distribution# two stage model treats each one equually 
-# if we treat it as normal even though its not, it'll 
+# note that neither are a normal distribution # two stage model treats each one equally 
+# if we treat it as normal even though its not, it'll cause the distance terms to have a weaker effect
 #Looking at distribution of coef and amount of variation in your coef is important to understand what's going on with a mixed effects model 
 ```
+Often the biggest source of variation is individual variation - start at this point. 
+- You could also look at herds 
+
 So a biological conclusions is that there is substantial variation between individuals in their coefficients for forage, wolf predation risk and the interaction. 
 
 
@@ -643,15 +663,18 @@ summary(fr.ri)
 ```
 Lets review how to interpret the Random Effects. Here, they are saying we have 17 elk with 34,390 rows of data, and the Std. Dev = 0.7899, which, compared to our standardized coefficient estimates for total herb and wolf risk are relatively huge. That is, another way of saying there is substantial individual-level variation in resource selection between individuals, equal to or greater than the variation in the actual strength of selection.  This is an important insight, confirming what we already learned from our Two-stage modeling above. 
 
-Its important to look at confidence intervals around our Beta estimates, not just the SE's. We can compute these using confint() are a reminder. There are multiple methods to choose from; we will use Wald here, but note that bootstrat CI's are generally considered the 'best'.   Refresh here: 
+Its important to look at confidence intervals around our Beta estimates, not just the SE's. We can compute these using confint() are a reminder. There are multiple methods to choose from; we will use Wald here, but note that bootstrap CI's are generally considered the 'best'.   Refresh here: 
 `confint()`
 ```{r}
 confint(fr.ri, method = "Wald")
+confint(model, method = "Wald")
+# gives you the 95% confidence intervals of our estimates
+# bootstrapping and profile are also good to use but take time
 ```
 `confint(fr.ri, method = "boot")`
 `confint(fr.ri, method = "profile")`
 
-Standard errors in a linear regression model don't translate to a confidece interval
+Standard errors in a linear regression model don't translate to a confidence interval
 
 
 Lets remind ourselves of the model structure and 'new' parameters being estimated with the 95% confidence intervals graphically. 
@@ -662,7 +685,7 @@ Note now we have 1 more parameter being estimated, the sd in the intercept.  Thi
 
 # Learning about How GLMM's are Being Fit
 
-By default, R is fitting the GLMM by Laplace approximation to the MLE estimator, which by default is 1 decimal place/point (numerical integration points) at which the model is fit with Adaptive Gauss-Hermite Quadrature.  The recommended # of nip points is >> 5 for most binomial GLMM's. We set this by changing the nACQ - integer scalar's. 
+By default, R is fitting the GLMM by Laplace approximation to the MLE estimator, which by default is 1 decimal place/point (numerical integration points) at which the model is fit with Adaptive Gauss-Hermite Quadrature.  The recommended # of nip points (numerican integration points) is >> 5 for most binomial GLMM's. We set this by changing the nACQ - integer scalar's. 
 
 nAGQ- integer scalar - the number of points per axis for evaluating the adaptive Gauss-Hermite approximation to the log-likelihood. Defaults to 1, corresponding to the Laplace approximation. Values greater than 1 produce greater accuracy in the evaluation of the log-likelihood at the expense of speed. A value of zero uses a faster but less exact form of parameter estimation for GLMMs by optimizing the random effects and the fixed-effects coefficients in the penalized iteratively reweighted least squares step. The key paper is:
 
@@ -672,7 +695,10 @@ Rabe-Hesketh, S., A. Skrondal, and A. Pickles. 2005. Maximum Likelihood Estimati
 fr.ri2 = glmer(used~totalherb_sc+ctotrisk_sc+ctotrisk_sc*totalherb_sc+(1|elkuid), data=elk2,family=binomial(link="logit"), verbose=FALSE, nAGQ = 10)
 summary(fr.ri2)
 ```
-Note there really is no major effect in this dataset.  But - good to know.  Also note that it takes a lot longer to fit the model. 
+Note there really is no major effect in this dataset.  But - good to know.  Also note that it takes a lot longer to fit the model.
+
+These are examples of tricks to use when the models don't converge. 
+
 
 ## Comparing Random Intercept Model and Two-Stage Model Coefficients
 
@@ -682,10 +708,9 @@ It is often useful to compare the beta coefficients from 'manual' two-stage mode
 ```{r}
 # Useful functions
 # fixedef() - extracts fixed effects estimates
-fixef(fr.ri) 
+fixef(fr.ri)  #fr.ri forage risk random intercepts model
 # ranef() - extracts random effects
-ranef(fr.ri)
-# that's how much more or less than the expected probability each individual is 
+ranef(fr.ri) # this gives us how much more or less than the average baseline probability each individual elk is 
 ```
 Compare these to the fixed effect coefficients estimated with an intercept for each individual elk? How do they compare?
 
@@ -693,9 +718,12 @@ Or, we can look at both fixed- and random-effects from a random effects model us
 ```{r}
 coef(fr.ri) 
 ```
-Note this shows you the entire coefficient matrix for all individual elk - note that the rest of the model is fixed for each individual elk. 
+Note this shows you the entire coefficient matrix for all individual elk - note that the rest of the model (the coefficients for total herb, predation risk, and the interaction) is fixed for each individual elk. 
 
 Next we will compare the intercepts from two step and mixed-effects model.  This forces us to think about what the interpretation of a random intercept is in a used-available design.  First, I out everything in one place; I add the fixed intercept to the random effects here.Note you could also get this from coef(fr.ri) as we just did. 
+
+
+############ STOPPED 1:21:00 in lecture recording 3/9 #################
 ```{r}
 # column bind the betas from the coefficients (randomand fixed effects)
 B0 <- cbind(as.numeric(coefs[1,]),ranef(fr.ri)$elkuid[,1]+fixef(fr.ri)[1])
